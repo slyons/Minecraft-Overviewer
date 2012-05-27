@@ -35,6 +35,8 @@ from .optimizeimages import optimize_image
 import rendermodes
 import c_overviewer
 
+logging.basicConfig(filename='overviewer.log',level=logging.DEBUG)
+
 """
 
 tileset.py contains the TileSet class, and in general, routines that manage a
@@ -485,7 +487,7 @@ class TileSet(object):
                 # All others
                 dest = os.path.join(self.outputdir, *(str(x) for x in tilepath[:-1]))
                 name = str(tilepath[-1])
-            self._render_compositetile(dest, name)
+            self._render_compositetile(dest, name, len(tilepath))
 
     def get_initial_data(self):
         """This is called similarly to get_persistent_data, but is called after
@@ -583,6 +585,8 @@ class TileSet(object):
             if xradius >= bounds.maxcol and -xradius <= bounds.mincol and \
                     yradius >= bounds.maxrow + 32 and -yradius <= bounds.minrow:
                 break
+        logging.debug("Tree depth is now %d" % p)
+        
         self.treedepth = p
         self.xradius = xradius
         self.yradius = yradius
@@ -794,7 +798,7 @@ class TileSet(object):
     def __str__(self):
         return "<TileSet for %s>" % os.path.basename(self.outputdir)
 
-    def _render_compositetile(self, dest, name):
+    def _render_compositetile(self, dest, name, pathdepth):
         """
         Renders a tile at os.path.join(dest, name)+".ext" by taking tiles from
         os.path.join(dest, name, "{0,1,2,3}.png")
@@ -838,7 +842,7 @@ class TileSet(object):
             quadPath_filtered.append(path)
             if quad_mtime > max_mtime:
                 max_mtime = quad_mtime
-
+        
         # If no children exist, delete this tile
         if not quadPath_filtered:
             try:
@@ -873,10 +877,16 @@ class TileSet(object):
         # Save it
         with FileReplacer(imgpath) as tmppath:
             if imgformat == 'jpg':
-                img.save(tmppath, "jpeg", quality=self.options['imgquality'], subsampling=0)
+                if isinstance(self.options["imgquality"],dict):
+                    quality = self.options["imgquality"].get(pathdepth, 95)
+                    if pathdepth not in self.options["imgquality"]:
+                        logging.info("Quality for zoom level %d is %d" % (pathdepth, quality))
+                else:
+                    quality = self.options["imgquality"]
+                img.save(tmppath, "jpeg", quality=quality, subsampling=0)
             else: # png
-                img.save(tmppath, "png")
-
+                img.save(tmppath, "png", optimize=True)
+            
             if self.options['optimizeimg']:
                 optimize_image(tmppath, imgformat, self.options['optimizeimg'])
 
@@ -976,9 +986,15 @@ class TileSet(object):
         # Save them
         with FileReplacer(imgpath) as tmppath:
             if self.imgextension == 'jpg':
-                tileimg.save(tmppath, "jpeg", quality=self.options['imgquality'], subsampling=0)
+                if isinstance(self.options["imgquality"],dict):
+                    quality = self.options["imgquality"].get(self.treedepth, 95)
+                    if self.treedepth not in self.options["imgquality"]:
+                        logging.info("Quality for zoom level %d is %d" % (self.treedepth, quality))
+                else:
+                    quality = self.options["imgquality"]
+                tileimg.save(tmppath, "jpeg", quality=quality, subsampling=0)
             else: # png
-                tileimg.save(tmppath, "png")
+                tileimg.save(tmppath, "png", optimize=True)
 
             if self.options['optimizeimg']:
                 optimize_image(tmppath, self.imgextension, self.options['optimizeimg'])

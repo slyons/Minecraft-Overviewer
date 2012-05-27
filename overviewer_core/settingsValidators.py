@@ -126,6 +126,10 @@ def validateImgFormat(fmt):
     return fmt
 
 def validateImgQuality(qual):
+    if isinstance(qual, dict):
+        for v in qual.values():
+            validateImgQuality(v)
+        return qual
     intqual = int(qual)
     if (intqual < 0 or intqual > 100):
         raise ValidationException("%r is not a valid image quality" % intqual)
